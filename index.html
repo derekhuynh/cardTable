@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Canvas Squares</title>
+  <link type="text/css" rel="stylesheet" href="src/style.css">
+</head>
+<body>
+  <div id="sideMenu" class="">
+    <button id="menuToggleBtn">&#9776;</button>
+    <div id="menuContent">
+      <div id="controls">
+        <div id="rtcMenu">
+          <span id="">Id</span>
+          <input id="idInput" type="text" placeholder="Enter user id here here..."/>
+          <span id="">Room Id</span>
+          <input id="callInput" type="text" placeholder="Paste WebRTC offer/answer here..."/>
+          <div id="rtcMenuButtons">
+            <button id="startOfferBtn">Start Room</button>
+            <button id="callButton">Connect to Room</button>
+          </div>
+          <div id="rtcStatus">Not connected...</div>
+        </div>
+      </div>
+      <div id="console">
+        <div id="consoleWindow"></div>
+        <input id="consoleInput" type="text" placeholder="Type here and press Enter..." />
+      </div>
+    </div>
+  </div>
+  <canvas id="canvas" width="800" height="600"></canvas>
+  <script type="module" src="./src/console.ts"></script>
+  <script type="module" src="./src/menu.ts"></script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

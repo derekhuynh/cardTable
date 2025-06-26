@@ -1,0 +1,97 @@
+body {
+  margin: 0;
+}
+canvas {
+  background: #f0f0f0;
+  display: block;
+  margin: 0 auto;
+}
+#controls {
+  
+}
+#console{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 20px 0 0;
+}
+#consoleWindow {
+  width: 100%;
+  max-height: 100px;
+  background: rgba(30,30,30,0.95);
+  color: #eee;
+  font-family: monospace;
+  font-size: 14px;
+  overflow-y: auto;
+  border-radius: 6px;
+  padding: 10px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px #000a;
+  /* pointer-events: none; */
+}
+#consoleInput {
+  width: 100%;
+  z-index: 1001;
+  background: #222;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-family: monospace;
+  font-size: 14px;
+}
+#offerInput {
+  width: 200px;
+  /* height: 60px; */
+  margin-top: 5px;
+}
+#sideMenu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 240px;
+  height: 100%;
+  background: #434953;
+  color: #fff;
+  z-index: 2000;
+  box-shadow: 2px 0 8px #000a;
+  transition: transform 0.2s;
+  transform: translateX(0);
+  display: flex;
+  flex-direction: column;
+}
+#sideMenu.collapsed {
+  transform: translateX(-240px);
+}
+#menuToggleBtn {
+  background: #23272e;
+  color: #fff;
+  border: none;
+  width: 40px;
+  height: 40px;
+  margin: 10px 0 0 235px;
+  cursor: pointer;
+  font-size: 22px;
+  outline: none;
+}
+#menuContent {
+  display: flex;
+  flex: 1;
+  padding: 20px 10px 10px 10px;
+  overflow-y: auto;
+  flex-direction: column;
+  margin-top: -50px;
+  justify-content: space-between;
+}
+
+/* Rtc menu */
+#rtcMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#rtcMenuButtons {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
