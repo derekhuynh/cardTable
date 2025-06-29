@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Square } from './classes/Square.js';
 import { sendMessage, setOnMessage } from './rtc.js';
+import {handleMessage} from './messageReducer.ts';
 
 const SQUARE_SIZE = 60;
 const SQUARE_HEIGHT = 20;
@@ -152,7 +153,8 @@ setOnMessage((msg, peerId) => {
       sq.position.y = msg.y;
     }
   } else if (msg.type === "chat") {
-    window.log && window.log(`[${peerId || "peer"}]: ${msg.text}`);
+    // window.log && window.log(`[${peerId || "peer"}]: ${msg.text}`);
+    window.log && handleMessage({...msg, userId: peerId || "peer"});
   }
 });
 

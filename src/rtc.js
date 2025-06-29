@@ -3,6 +3,7 @@ let peerConnections = {}; // { peerId: RTCPeerConnection } only used by host
 let hostConnection; // used by peer to connect to host
 let hostDataChannel; // used by peer to connect to host's data channel
 let onMessage = null;
+let roomname = null;
 window.peerConnections = peerConnections;
 window.dataChannels = dataChannels;
 window.hostConnection = hostConnection;
@@ -50,7 +51,8 @@ const rtcConfig = {
 // --- HOST LOGIC ---
 startOfferButton.onclick = async () => {
   // Create a room with a random ID if not provided
-  const roomId = idInput.value.trim() || randomId();
+  roomname = idInput.value.trim();
+  const roomId = roomname || randomId();
   const roomRef = doc(collection(firestore, 'rooms'), roomId);
   const peersRef = collection(roomRef, 'peers');
 
@@ -87,6 +89,7 @@ async function onPeerJoin(peersRef, peerId) {
   await peerConnections[peerId].setLocalDescription(offer);
 
   // 5. Store offer in Firestore
+  // HOST stores full offer object
   await setDoc(doc(peersRef, peerId), { offer: offer }, { merge: true });
 
   // 6. Listen for answer from this peer
@@ -112,6 +115,12 @@ async function onPeerJoin(peersRef, peerId) {
     log(`Data channel established with peer ${peerId}`);
     dataChannels[peerId] = e.channel;
     setupChannel(e.channel, peerId);
+  };
+  pc.onconnectionstatechange = () => {
+    log(`Connection state: ${pc.connectionState}`);
+    if (pc.connectionState === 'failed') {
+      log('Connection failed - may need TURN server');
+    }
   };
   updateRtcStatus();
 }
@@ -156,7 +165,7 @@ async function onJoin(peerRef, peerId, data){
 
   // Create data channel BEFORE setting remote description and creating answer
   // const dc = pc.createDataChannel("data");
-  // dataChannels[peerId] = dc;
+  // hostDataChannel = dc;
   // setupChannel(dc, peerId);
 
   // Set remote offer
@@ -176,7 +185,8 @@ async function onJoin(peerRef, peerId, data){
   // Create answer and upload to Firestore
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  await setDoc(peerRef, { answer: { type: answer.type, sdp: answer.sdp } }, { merge: true });
+  // PEER stores structured answer
+  await setDoc(peerRef, { answer: answer }, { merge: true });
 
   // ICE candidate handling
   addIceListeners(pc, peerRef, peerId, "answer"); 
@@ -186,7 +196,12 @@ async function onJoin(peerRef, peerId, data){
     dataChannels[peerId] = e.channel;
     setupChannel(e.channel, peerId);
   };
-
+  pc.onconnectionstatechange = () => {
+    log(`Connection state: ${pc.connectionState}`);
+    if (pc.connectionState === 'failed') {
+      log('Connection failed - may need TURN server');
+    }
+  };
   log("Joined room.");
   updateRtcStatus();
 }
@@ -214,7 +229,11 @@ export function setOnMessage(fn) {
 export function sendMessage(msg, excludePeerId = null) {
   Object.entries(dataChannels).forEach(([peerId, dc]) => {
     if (dc && dc.readyState === "open" && peerId !== excludePeerId) {
-      dc.send(JSON.stringify(msg));
+      if (!msg.senderId) {
+        dc.send(JSON.stringify({...msg, senderId: peerId}));
+      }else{
+        dc.send(JSON.stringify({...msg}));
+      }
     }
   });
 }
@@ -225,6 +244,12 @@ function setupChannel(channel, peerId) {
     log(`Data channel open with ${peerId}!`);
     updateRtcStatus();
   };
+  channel.onerror = (error) => {
+    log(`Data channel error with ${peerId}: ${error}`);
+  };
+  channel.onclose = () => {
+    log(`Data channel closed with ${peerId}`);
+  };
   channel.onmessage = e => {
     let parsed;
     try {
@@ -233,7 +258,7 @@ function setupChannel(channel, peerId) {
       parsed = e.data;
     }
     // Relay chat messages from peers if host
-    if (isHost() && parsed && parsed.type === "chat") {
+    if (isHost() && parsed) {
       // Relay to all except sender
       sendMessage(parsed, peerId);
     }
@@ -260,7 +285,7 @@ function updateRtcStatus() {
 
   // Determine if this client is host or peer
   let isHost = !!peerConnections && Object.keys(peerConnections).length > 0 && startOfferButton && !callButton.disabled;
-  let hostLabel = isHost ? "&lt;Host&gt;" : "&lt;Peer&gt;";
+  let hostLabel = roomname;
   let peersList = [];
 
   // For host, show all connected peer IDs
