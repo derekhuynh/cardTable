@@ -49,13 +49,18 @@ function squaresIntersect(a, b) {
 }
 
 // Create a square mesh using the Square class
-function createSquare(x, y, remote = false) {
-  const mesh = new Square(x, y, SQUARE_SIZE, SQUARE_HEIGHT);
+function createSquare(x, y, remote = false, squareId = null) {
+  const mesh = new Square(x, y, SQUARE_SIZE, SQUARE_HEIGHT, 0x3498db, squareId);
   scene.add(mesh);
   if (!remote) {
-    sendMessage({ type: "spawn", x, y });
+    sendMessage({ type: "spawn", x, y, id: mesh.squareId });
   }
   return mesh;
+}
+
+// Helper function to find a square by its ID
+function findSquareById(id) {
+  return squares.find(square => square.squareId === id);
 }
 
 // Update colors based on intersection
@@ -134,20 +139,38 @@ renderer.domElement.addEventListener('mousemove', (e) => {
 });
 
 renderer.domElement.addEventListener('mouseup', () => {
+  if (dragging) {
+    // Send move message to peers when drag ends
+    sendMessage({ 
+      type: "move", 
+      id: dragging.squareId, 
+      x: dragging.position.x, 
+      y: dragging.position.y 
+    });
+  }
   dragging = null;
 });
 
 renderer.domElement.addEventListener('mouseleave', () => {
+  if (dragging) {
+    // Send move message to peers when drag ends due to mouse leave
+    sendMessage({ 
+      type: "move", 
+      id: dragging.squareId, 
+      x: dragging.position.x, 
+      y: dragging.position.y 
+    });
+  }
   dragging = null;
 });
 
 // Handle incoming RTC messages
 setOnMessage((msg, peerId) => {
   if (msg.type === "spawn") {
-    const sq = createSquare(msg.x, msg.y, true);
+    const sq = createSquare(msg.x, msg.y, true, msg.id);
     squares.push(sq);
   } else if (msg.type === "move") {
-    const sq = squares[msg.id];
+    const sq = findSquareById(msg.id);
     if (sq) {
       sq.position.x = msg.x;
       sq.position.y = msg.y;

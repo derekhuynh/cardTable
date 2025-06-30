@@ -5,15 +5,17 @@ interface SquareUserData {
 }
 
 export class Square extends THREE.Mesh{
+  public squareId: string;
   public size: number;
   public height: number;
   public userData: SquareUserData;
 
-  constructor(x: number, y: number, size: number = 60, height: number = 20, color: number = 0x3498db) {
+  constructor(x: number, y: number, size: number = 60, height: number = 20, color: number = 0x3498db, squareId?: string) {
     const geometry = new THREE.BoxGeometry(size, size, height);
     const material = new THREE.MeshBasicMaterial({ color });
     super(geometry, material);
 
+    this.squareId = squareId || this.generateId();
     this.size = size;
     this.height = height;
     this.userData = { isIntersecting: false };
@@ -24,6 +26,10 @@ export class Square extends THREE.Mesh{
   setIntersecting(isIntersecting: boolean): void {
     this.userData.isIntersecting = isIntersecting;
     (this.material as THREE.MeshBasicMaterial).color.set(isIntersecting ? 0xe74c3c : 0x3498db);
+  }
+
+  private generateId(): string {
+    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
   }
 
   update(): void {
