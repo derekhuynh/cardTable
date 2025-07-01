@@ -1,26 +1,46 @@
 import * as THREE from 'three';
+import { GameObject } from './GameObject.js';
 
 interface SquareUserData {
   isIntersecting: boolean;
 }
 
-export class Square extends THREE.Mesh{
-  public squareId: string;
+export class Square extends GameObject {
+  public mesh: THREE.Mesh;
   public size: number;
   public height: number;
   public userData: SquareUserData;
 
-  constructor(x: number, y: number, size: number = 60, height: number = 20, color: number = 0x3498db, squareId?: string) {
+  constructor(x: number, y: number, size: number = 60, height: number = 20, color: number = 0x3498db, id?: string) {
+    super();
+    
+    // Override the generated ID if one is provided
+    if (id) {
+      this.id = id;
+    }
+
     const geometry = new THREE.BoxGeometry(size, size, height);
     const material = new THREE.MeshBasicMaterial({ color });
-    super(geometry, material);
+    this.mesh = new THREE.Mesh(geometry, material);
 
-    this.squareId = squareId || this.generateId();
     this.size = size;
     this.height = height;
     this.userData = { isIntersecting: false };
-    // Set the position after calling super to ensure 'position' exists
-    this.position.set(x, y, 0);
+    
+    // Set the position after creating mesh
+    this.mesh.position.set(x, y, 0);
+    
+    // Add mesh to transform
+    this.transform.add(this.mesh);
+  }
+
+  // Delegate position access to the mesh for compatibility
+  get position(): THREE.Vector3 {
+    return this.mesh.position;
+  }
+
+  get material(): THREE.Material | THREE.Material[] {
+    return this.mesh.material;
   }
 
   setIntersecting(isIntersecting: boolean): void {
@@ -28,8 +48,8 @@ export class Square extends THREE.Mesh{
     (this.material as THREE.MeshBasicMaterial).color.set(isIntersecting ? 0xe74c3c : 0x3498db);
   }
 
-  private generateId(): string {
-    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+  set renderOrder(value: number) {
+    this.mesh.renderOrder = value;
   }
 
   update(): void {

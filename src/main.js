@@ -49,18 +49,18 @@ function squaresIntersect(a, b) {
 }
 
 // Create a square mesh using the Square class
-function createSquare(x, y, remote = false, squareId = null) {
-  const mesh = new Square(x, y, SQUARE_SIZE, SQUARE_HEIGHT, 0x3498db, squareId);
-  scene.add(mesh);
+function createSquare(x, y, remote = false, id = null) {
+  const mesh = new Square(x, y, SQUARE_SIZE, SQUARE_HEIGHT, 0x3498db, id);
+  scene.add(mesh.mesh);
   if (!remote) {
-    sendMessage({ type: "spawn", x, y, id: mesh.squareId });
+    sendMessage({ type: "spawn", x, y, id: mesh.id });
   }
   return mesh;
 }
 
 // Helper function to find a square by its ID
 function findSquareById(id) {
-  return squares.find(square => square.squareId === id);
+  return squares.find(square => square.id === id);
 }
 
 // Update colors based on intersection
@@ -99,9 +99,12 @@ function getSquareAt(mx, my) {
     (mx / cameraSettings.right) * 2 - 1,
     -(my / cameraSettings.top) * 2 + 1
   ), camera);
-  const intersects = raycaster.intersectObjects(squares);
+  const meshes = squares.map(square => square.mesh);
+  const intersects = raycaster.intersectObjects(meshes);
   if (intersects.length > 0) {
-    return intersects[0].object;
+    // Find the square that owns this mesh
+    const hitMesh = intersects[0].object;
+    return squares.find(square => square.mesh === hitMesh);
   }
   return null;
 }
@@ -143,7 +146,7 @@ renderer.domElement.addEventListener('mouseup', () => {
     // Send move message to peers when drag ends
     sendMessage({ 
       type: "move", 
-      id: dragging.squareId, 
+      id: dragging.id, 
       x: dragging.position.x, 
       y: dragging.position.y 
     });
@@ -156,7 +159,7 @@ renderer.domElement.addEventListener('mouseleave', () => {
     // Send move message to peers when drag ends due to mouse leave
     sendMessage({ 
       type: "move", 
-      id: dragging.squareId, 
+      id: dragging.id, 
       x: dragging.position.x, 
       y: dragging.position.y 
     });
