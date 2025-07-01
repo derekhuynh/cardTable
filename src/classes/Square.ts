@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GameObject } from './GameObject.js';
+import { GameObject, GAME_OBJECT_TYPES } from './GameObject.js';
 
 interface SquareUserData {
   isIntersecting: boolean;
@@ -7,12 +7,12 @@ interface SquareUserData {
 
 export class Square extends GameObject {
   public mesh: THREE.Mesh;
-  public size: number;
+  private _size: number;
   public height: number;
   public userData: SquareUserData;
 
   constructor(x: number, y: number, size: number = 60, height: number = 20, color: number = 0x3498db, id?: string) {
-    super();
+    super(GAME_OBJECT_TYPES.SQUARE);
     
     // Override the generated ID if one is provided
     if (id) {
@@ -23,7 +23,7 @@ export class Square extends GameObject {
     const material = new THREE.MeshBasicMaterial({ color });
     this.mesh = new THREE.Mesh(geometry, material);
 
-    this.size = size;
+    this._size = size;
     this.height = height;
     this.userData = { isIntersecting: false };
     
@@ -32,6 +32,11 @@ export class Square extends GameObject {
     
     // Add mesh to transform
     this.transform.add(this.mesh);
+  }
+
+  // Override GameObject's size getter
+  get size(): number {
+    return this._size;
   }
 
   // Delegate position access to the mesh for compatibility

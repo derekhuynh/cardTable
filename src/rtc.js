@@ -243,6 +243,19 @@ function setupChannel(channel, peerId) {
   channel.onopen = () => {
     log(`Data channel open with ${peerId}!`);
     updateRtcStatus();
+    
+    // Send SYNC message to newly connected peer if we're the host
+    if (isHost()) {
+      import('./main.js').then(({ syncAllObjects }) => {
+        const syncMessage = syncAllObjects();
+        if (syncMessage.objects.length > 0) {
+          log(`Sending SYNC with ${syncMessage.objects.length} objects to ${peerId}`);
+          channel.send(JSON.stringify(syncMessage));
+        }
+      }).catch(err => {
+        console.error('Failed to import syncAllObjects:', err);
+      });
+    }
   };
   channel.onerror = (error) => {
     log(`Data channel error with ${peerId}: ${error}`);

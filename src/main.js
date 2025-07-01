@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { Square } from './classes/Square.js';
+import { GameObject, GAME_OBJECT_TYPES } from './classes/GameObject.js';
 import { sendMessage, setOnMessage } from './rtc.js';
 import {handleMessage} from './messageReducer.ts';
 
 const SQUARE_SIZE = 60;
 const SQUARE_HEIGHT = 20;
-let squares = [];
+let gameObjects = [];
 let dragging = null;
 let offset = new THREE.Vector2();
 let raycaster = new THREE.Raycaster();
@@ -38,42 +39,67 @@ camera.position.z = 100;
 
 // camera.rotateOnAxis(new THREE.Vector3(5, 5, 0), .05);
 
-// Helper: check if two squares intersect (2D)
-function squaresIntersect(a, b) {
+// Helper: check if two game objects intersect (2D)
+function gameObjectsIntersect(a, b) {
   return (
-    a.position.x < b.position.x + SQUARE_SIZE &&
-    a.position.x + SQUARE_SIZE > b.position.x &&
-    a.position.y < b.position.y + SQUARE_SIZE &&
-    a.position.y + SQUARE_SIZE > b.position.y
+    a.position.x < b.position.x + b.size &&
+    a.position.x + a.size > b.position.x &&
+    a.position.y < b.position.y + b.size &&
+    a.position.y + a.size > b.position.y
   );
 }
 
-// Create a square mesh using the Square class
-function createSquare(x, y, remote = false, id = null) {
-  const mesh = new Square(x, y, SQUARE_SIZE, SQUARE_HEIGHT, 0x3498db, id);
-  scene.add(mesh.mesh);
-  if (!remote) {
-    sendMessage({ type: "spawn", x, y, id: mesh.id });
+// Create a game object using the factory pattern
+function createGameObject(type, x, y, remote = false, id = null) {
+  let gameObject;
+  
+  switch (type) {
+    case GAME_OBJECT_TYPES.SQUARE:
+      gameObject = new Square(x, y, SQUARE_SIZE, SQUARE_HEIGHT, 0x3498db, id);
+      scene.add(gameObject.mesh);
+      break;
+    default:
+      throw new Error(`Unknown game object type: ${type}`);
   }
-  return mesh;
+  
+  if (!remote) {
+    sendMessage({ type: "spawn", x, y, id: gameObject.id, objectType: type });
+  }
+  return gameObject;
 }
 
-// Helper function to find a square by its ID
+// Backward compatibility wrapper
+function createSquare(x, y, remote = false, id = null) {
+  return createGameObject(GAME_OBJECT_TYPES.SQUARE, x, y, remote, id);
+}
+
+// Helper function to find a game object by its ID
+function findGameObjectById(id) {
+  return gameObjects.find(gameObject => gameObject.id === id);
+}
+
+// Backward compatibility wrapper
 function findSquareById(id) {
-  return squares.find(square => square.id === id);
+  return findGameObjectById(id);
 }
 
 // Update colors based on intersection
 function updateIntersections() {
-  squares.forEach(sq => {
-    sq.setIntersecting(false);
+  gameObjects.forEach(obj => {
+    if (obj.setIntersecting) {
+      obj.setIntersecting(false);
+    }
   });
 
-  for (let i = 0; i < squares.length; i++) {
-    for (let j = i + 1; j < squares.length; j++) {
-      if (squaresIntersect(squares[i], squares[j])) {
-        squares[i].setIntersecting(true);
-        squares[j].setIntersecting(true);
+  for (let i = 0; i < gameObjects.length; i++) {
+    for (let j = i + 1; j < gameObjects.length; j++) {
+      if (gameObjectsIntersect(gameObjects[i], gameObjects[j])) {
+        if (gameObjects[i].setIntersecting) {
+          gameObjects[i].setIntersecting(true);
+        }
+        if (gameObjects[j].setIntersecting) {
+          gameObjects[j].setIntersecting(true);
+        }
       }
     }
   }
@@ -94,19 +120,24 @@ function getMousePos(event) {
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 }
 
-function getSquareAt(mx, my) {
+function getGameObjectAt(mx, my) {
   raycaster.setFromCamera(new THREE.Vector2(
     (mx / cameraSettings.right) * 2 - 1,
     -(my / cameraSettings.top) * 2 + 1
   ), camera);
-  const meshes = squares.map(square => square.mesh);
+  const meshes = gameObjects.map(obj => obj.mesh).filter(mesh => mesh);
   const intersects = raycaster.intersectObjects(meshes);
   if (intersects.length > 0) {
-    // Find the square that owns this mesh
+    // Find the game object that owns this mesh
     const hitMesh = intersects[0].object;
-    return squares.find(square => square.mesh === hitMesh);
+    return gameObjects.find(obj => obj.mesh === hitMesh);
   }
   return null;
+}
+
+// Backward compatibility wrapper
+function getSquareAt(mx, my) {
+  return getGameObjectAt(mx, my);
 }
 
 // Mouse events
@@ -120,14 +151,16 @@ renderer.domElement.addEventListener('mousedown', (e) => {
   if (hit) {
     hit.update()
     dragging = hit;
-    hit.renderOrder = 1; // Bring to front
-    squares = squares.filter(sq => sq !== hit);
-    squares.push(hit);
+    if (hit.renderOrder !== undefined) {
+      hit.renderOrder = 1; // Bring to front
+    }
+    gameObjects = gameObjects.filter(obj => obj !== hit);
+    gameObjects.push(hit);
     offset.x = mx - (hit.position.x);
     offset.y = (cameraSettings.top - my) - (hit.position.y);
   } else {
-    const sq = createSquare(mx, (cameraSettings.top - my));
-    squares.push(sq);
+    const obj = createSquare(mx, (cameraSettings.top - my));
+    gameObjects.push(obj);
   }
 });
 
@@ -170,13 +203,22 @@ renderer.domElement.addEventListener('mouseleave', () => {
 // Handle incoming RTC messages
 setOnMessage((msg, peerId) => {
   if (msg.type === "spawn") {
-    const sq = createSquare(msg.x, msg.y, true, msg.id);
-    squares.push(sq);
+    const objectType = msg.objectType || GAME_OBJECT_TYPES.SQUARE;
+    const obj = createGameObject(objectType, msg.x, msg.y, true, msg.id);
+    gameObjects.push(obj);
   } else if (msg.type === "move") {
-    const sq = findSquareById(msg.id);
-    if (sq) {
-      sq.position.x = msg.x;
-      sq.position.y = msg.y;
+    const obj = findGameObjectById(msg.id);
+    if (obj) {
+      obj.position.x = msg.x;
+      obj.position.y = msg.y;
+    }
+  } else if (msg.type === "sync") {
+    // Handle sync message with multiple objects
+    if (msg.objects && Array.isArray(msg.objects)) {
+      msg.objects.forEach(objData => {
+        const obj = createGameObject(objData.type, objData.x, objData.y, true, objData.id);
+        gameObjects.push(obj);
+      });
     }
   } else if (msg.type === "chat") {
     // window.log && window.log(`[${peerId || "peer"}]: ${msg.text}`);
@@ -203,6 +245,24 @@ function resizeCameraAndRenderer() {
   cameraSettings.right = width;
   cameraSettings.top = height;
   cameraSettings.bottom = 0;
+}
+
+// Function to sync all current game objects to a new peer
+export function syncAllObjects() {
+  const objectsData = gameObjects.map(obj => ({
+    id: obj.id,
+    type: obj.type,
+    x: obj.position.x,
+    y: obj.position.y,
+    size: obj.size,
+    height: obj.height || 20,
+    color: obj.material && obj.material.color ? obj.material.color.getHex() : 0x3498db
+  }));
+  
+  return {
+    type: "sync",
+    objects: objectsData
+  };
 }
 
 resizeCameraAndRenderer();

@@ -14,6 +14,7 @@ export interface SpawnPayload {
   x: number;
   y: number;
   id: string;
+  objectType?: string;
 }
 
 export interface MovePayload {
@@ -30,8 +31,18 @@ export interface ChatPayload {
   text: string;
 }
 
+export interface GameObjectData {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  size: number;
+  height?: number;
+  color?: number;
+}
+
 export interface SyncPayload {
-  [key: string]: any; // Flexible for sync data
+  objects: GameObjectData[];
 }
 
 export interface UserJoinPayload {
