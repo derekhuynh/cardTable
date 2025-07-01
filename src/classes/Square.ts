@@ -6,17 +6,17 @@ interface SquareUserData {
 }
 
 export class Square extends GameObject {
-  public mesh: THREE.Mesh;
+  private mesh: THREE.Mesh;
   private _size: number;
   public height: number;
   public userData: SquareUserData;
 
-  constructor(x: number, y: number, size: number = 60, height: number = 20, color: number = 0x3498db, id?: string) {
+  constructor(x: number, y: number, size: number = 60, height: number = 20, color: number = 0x3498db, gameId?: string) {
     super(GAME_OBJECT_TYPES.SQUARE);
     
     // Override the generated ID if one is provided
-    if (id) {
-      this.id = id;
+    if (gameId) {
+      this.gameId = gameId;
     }
 
     const geometry = new THREE.BoxGeometry(size, size, height);
@@ -27,11 +27,11 @@ export class Square extends GameObject {
     this.height = height;
     this.userData = { isIntersecting: false };
     
-    // Set the position after creating mesh
-    this.mesh.position.set(x, y, 0);
+    // Add mesh as child to this GameObject
+    this.add(this.mesh);
     
-    // Add mesh to transform
-    this.transform.add(this.mesh);
+    // Set position directly on this GameObject
+    this.position.set(x, y, 0);
   }
 
   // Override GameObject's size getter
@@ -39,21 +39,17 @@ export class Square extends GameObject {
     return this._size;
   }
 
-  // Delegate position access to the mesh for compatibility
-  get position(): THREE.Vector3 {
-    return this.mesh.position;
-  }
-
-  get material(): THREE.Material | THREE.Material[] {
-    return this.mesh.material;
+  // Access to mesh properties
+  get material(): THREE.MeshBasicMaterial {
+    return this.mesh.material as THREE.MeshBasicMaterial;
   }
 
   setIntersecting(isIntersecting: boolean): void {
     this.userData.isIntersecting = isIntersecting;
-    (this.material as THREE.MeshBasicMaterial).color.set(isIntersecting ? 0xe74c3c : 0x3498db);
+    this.material.color.set(isIntersecting ? 0xe74c3c : 0x3498db);
   }
 
-  set renderOrder(value: number) {
+  setRenderOrder(value: number) {
     this.mesh.renderOrder = value;
   }
 

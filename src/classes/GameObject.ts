@@ -6,15 +6,14 @@ export const GAME_OBJECT_TYPES = {
 
 export type GameObjectType = typeof GAME_OBJECT_TYPES[keyof typeof GAME_OBJECT_TYPES];
 
-export class GameObject {
-  public id: string;
-  public transform: THREE.Object3D;
+export class GameObject extends THREE.Object3D {
+  public gameId: string;
   public isActive: boolean;
   public type: GameObjectType;
 
   constructor(type: GameObjectType = GAME_OBJECT_TYPES.SQUARE) {
-    this.transform = new THREE.Object3D();
-    this.id = this.generateId();
+    super();
+    this.gameId = this.generateId();
     this.isActive = true; // Default to active
     this.type = type;
   }
@@ -29,12 +28,7 @@ export class GameObject {
     return 0;
   }
 
-  // Override this in subclasses to provide position for collision detection
-  get position(): THREE.Vector3 {
-    return this.transform.position;
-  }
-
   private generateId(): string {
-    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+    return Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
   }
 }0

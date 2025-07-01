@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-07-01
+
+### Changed
+- **BREAKING**: GameObject now extends THREE.Object3D directly instead of composition
+- GameObject uses `gameId` property instead of `id` to avoid THREE.js conflicts
+- Square class updated to work with new GameObject inheritance architecture
+- Scene management simplified - GameObjects added directly to scene
+- Raycasting updated to work with GameObject hierarchy using recursive intersection
+- Render order handling improved with proper method instead of property setter
+
+### Improved
+- Better memory usage by eliminating redundant Object3D instances
+- Cleaner API with natural THREE.js integration
+- Simplified codebase with fewer delegation patterns
+- More maintainable architecture for future GameObject types
+
 ## [0.2.0] - 2025-07-01
 
 ### Added
@@ -42,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved message handling for spawn and move events
 - Enhanced square tracking with unique identifiers
 
-[unreleased]: https://github.com/username/cardTable/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/username/cardTable/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/username/cardTable/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/username/cardTable/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/username/cardTable/releases/tag/v0.1.0

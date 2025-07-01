@@ -50,37 +50,37 @@ function gameObjectsIntersect(a, b) {
 }
 
 // Create a game object using the factory pattern
-function createGameObject(type, x, y, remote = false, id = null) {
+function createGameObject(type, x, y, remote = false, gameId = null) {
   let gameObject;
   
   switch (type) {
     case GAME_OBJECT_TYPES.SQUARE:
-      gameObject = new Square(x, y, SQUARE_SIZE, SQUARE_HEIGHT, 0x3498db, id);
-      scene.add(gameObject.mesh);
+      gameObject = new Square(x, y, SQUARE_SIZE, SQUARE_HEIGHT, 0x3498db, gameId);
+      scene.add(gameObject);
       break;
     default:
       throw new Error(`Unknown game object type: ${type}`);
   }
   
   if (!remote) {
-    sendMessage({ type: "spawn", x, y, id: gameObject.id, objectType: type });
+    sendMessage({ type: "spawn", x, y, id: gameObject.gameId, objectType: type });
   }
   return gameObject;
 }
 
 // Backward compatibility wrapper
-function createSquare(x, y, remote = false, id = null) {
-  return createGameObject(GAME_OBJECT_TYPES.SQUARE, x, y, remote, id);
+function createSquare(x, y, remote = false, gameId = null) {
+  return createGameObject(GAME_OBJECT_TYPES.SQUARE, x, y, remote, gameId);
 }
 
 // Helper function to find a game object by its ID
-function findGameObjectById(id) {
-  return gameObjects.find(gameObject => gameObject.id === id);
+function findGameObjectById(gameId) {
+  return gameObjects.find(gameObject => gameObject.gameId === gameId);
 }
 
 // Backward compatibility wrapper
-function findSquareById(id) {
-  return findGameObjectById(id);
+function findSquareById(gameId) {
+  return findGameObjectById(gameId);
 }
 
 // Update colors based on intersection
@@ -125,12 +125,14 @@ function getGameObjectAt(mx, my) {
     (mx / cameraSettings.right) * 2 - 1,
     -(my / cameraSettings.top) * 2 + 1
   ), camera);
-  const meshes = gameObjects.map(obj => obj.mesh).filter(mesh => mesh);
-  const intersects = raycaster.intersectObjects(meshes);
+  const intersects = raycaster.intersectObjects(gameObjects, true); // true for recursive
   if (intersects.length > 0) {
-    // Find the game object that owns this mesh
-    const hitMesh = intersects[0].object;
-    return gameObjects.find(obj => obj.mesh === hitMesh);
+    // Find the game object that owns this mesh (traverse up the parent hierarchy)
+    let object = intersects[0].object;
+    while (object && !gameObjects.includes(object)) {
+      object = object.parent;
+    }
+    return object || null;
   }
   return null;
 }
@@ -151,9 +153,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
   if (hit) {
     hit.update()
     dragging = hit;
-    if (hit.renderOrder !== undefined) {
-      hit.renderOrder = 1; // Bring to front
-    }
+    hit.setRenderOrder(1); // Bring to front
     gameObjects = gameObjects.filter(obj => obj !== hit);
     gameObjects.push(hit);
     offset.x = mx - (hit.position.x);
@@ -179,7 +179,7 @@ renderer.domElement.addEventListener('mouseup', () => {
     // Send move message to peers when drag ends
     sendMessage({ 
       type: "move", 
-      id: dragging.id, 
+      id: dragging.gameId, 
       x: dragging.position.x, 
       y: dragging.position.y 
     });
@@ -192,7 +192,7 @@ renderer.domElement.addEventListener('mouseleave', () => {
     // Send move message to peers when drag ends due to mouse leave
     sendMessage({ 
       type: "move", 
-      id: dragging.id, 
+      id: dragging.gameId, 
       x: dragging.position.x, 
       y: dragging.position.y 
     });
@@ -250,7 +250,7 @@ function resizeCameraAndRenderer() {
 // Function to sync all current game objects to a new peer
 export function syncAllObjects() {
   const objectsData = gameObjects.map(obj => ({
-    id: obj.id,
+    id: obj.gameId,
     type: obj.type,
     x: obj.position.x,
     y: obj.position.y,
