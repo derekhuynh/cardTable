@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-07-01
+
+### Added
+- Generic GameObject architecture for extensible game object types
+- SYNC message system for peer synchronization on join
+- Type-safe message interfaces with GameObjectData structure
+- Factory pattern for creating different game object types
+- Real-time state synchronization for late-joining peers
+
+### Changed
+- Refactored main.js to use gameObjects array instead of squares-specific code
+- Updated Square class to properly extend GameObject with type system
+- Enhanced collision detection to work with any GameObject size
+- Improved message handling to support object types and SYNC messages
+
+### Fixed
+- GameObject ID system now consistent across all object types
+- Peer synchronization now handles complete game state transfer
+
 ## [0.1.0] - 2025-07-01
 
 ### Added
@@ -23,5 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved message handling for spawn and move events
 - Enhanced square tracking with unique identifiers
 
-[unreleased]: https://github.com/username/cardTable/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/username/cardTable/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/username/cardTable/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/username/cardTable/releases/tag/v0.1.0

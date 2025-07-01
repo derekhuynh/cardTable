@@ -1,20 +1,30 @@
 # Claude Code Memory
 
 ## Project Overview
-This is a peer-to-peer card table application built with Three.js and WebRTC. Users can create and move squares/cards that sync in real-time across multiple peers.
+This is a peer-to-peer card table application built with Three.js and WebRTC. Users can create and move game objects (squares/cards) that sync in real-time across multiple peers.
 
-## Recent Changes - Square Movement Synchronization
-Fixed issue where square movements were not syncing between peers.
+## Recent Changes - GameObject Architecture & SYNC System (v0.2.0)
+Implemented generic GameObject architecture and peer synchronization system for late-joining peers.
 
 ### Files Modified:
-- `src/classes/Square.ts`: Added unique `squareId` system
-- `src/main.js`: Added move message broadcasting and proper message handling
+- `src/classes/GameObject.ts`: Added type system, size/position getters, and GAME_OBJECT_TYPES enum
+- `src/classes/Square.ts`: Now extends GameObject with proper type property and size override
+- `src/main.js`: Complete refactor to use gameObjects array with factory pattern
+- `src/messageReducer.ts`: Updated interfaces for object types and SYNC messages
+- `src/rtc.js`: Added SYNC message sending when peers connect
 
 ### Key Implementation Details:
-- Squares now have unique `squareId` property to track across peers
-- Move messages are sent when dragging ends (mouseup/mouseleave)
-- `findSquareById()` function locates squares for updates
-- Messages include: `{ type: "spawn", x, y, id }` and `{ type: "move", id, x, y }`
+- GameObject base class with `id`, `type`, `size`, and `position` properties
+- Factory pattern: `createGameObject(type, x, y, remote, id)` for extensible object creation
+- SYNC system: Host sends complete game state to newly connected peers
+- Generic collision detection and mouse interaction that works with any GameObject
+- Backward compatibility maintained with wrapper functions
+- Type-safe message interfaces with GameObjectData structure
+
+### Previous Changes - Square Movement Synchronization
+- GameObject ID system (formerly squareId) for tracking across peers
+- Move messages sent when dragging ends (mouseup/mouseleave)
+- Message types: `{ type: "spawn", x, y, id, objectType }`, `{ type: "move", id, x, y }`, `{ type: "sync", objects: [...] }`
 
 ## Development Commands
 - `npm run dev` - Start development server
