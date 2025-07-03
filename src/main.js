@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Square } from './classes/Square.js';
+import { Card } from './classes/Card.js';
 import { GameObject, GAME_OBJECT_TYPES } from './classes/GameObject.js';
 import { sendMessage, setOnMessage } from './rtc.js';
 import {handleMessage} from './messageReducer.ts';
@@ -50,7 +51,7 @@ function gameObjectsIntersect(a, b) {
 }
 
 // Create a game object using the factory pattern
-function createGameObject(type, x, y, remote = false, gameId = null) {
+function createGameObject(type, x, y, remote = false, gameId = null, cardId = null) {
   let gameObject;
   
   switch (type) {
@@ -58,12 +59,26 @@ function createGameObject(type, x, y, remote = false, gameId = null) {
       gameObject = new Square(x, y, SQUARE_SIZE, SQUARE_HEIGHT, 0x3498db, gameId);
       scene.add(gameObject);
       break;
+    case GAME_OBJECT_TYPES.CARD:
+      if (!cardId) {
+        throw new Error('cardId is required for CARD type');
+      }
+      gameObject = new Card(x, y, cardId, gameId);
+      scene.add(gameObject);
+      break;
     default:
       throw new Error(`Unknown game object type: ${type}`);
   }
   
+  // Add object to gameObjects array for tracking
+  gameObjects.push(gameObject);
+  
   if (!remote) {
-    sendMessage({ type: "spawn", x, y, id: gameObject.gameId, objectType: type });
+    const message = { type: "spawn", x, y, id: gameObject.gameId, objectType: type };
+    if (cardId) {
+      message.cardId = cardId;
+    }
+    sendMessage(message);
   }
   return gameObject;
 }
@@ -72,6 +87,15 @@ function createGameObject(type, x, y, remote = false, gameId = null) {
 function createSquare(x, y, remote = false, gameId = null) {
   return createGameObject(GAME_OBJECT_TYPES.SQUARE, x, y, remote, gameId);
 }
+
+// Card creation helper
+function createCard(x, y, cardId, remote = false, gameId = null) {
+  return createGameObject(GAME_OBJECT_TYPES.CARD, x, y, remote, gameId, cardId);
+}
+
+// Export for console commands
+window.createCard = createCard;
+window.gameObjects = gameObjects;
 
 // Helper function to find a game object by its ID
 function findGameObjectById(gameId) {
@@ -160,7 +184,6 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     offset.y = (cameraSettings.top - my) - (hit.position.y);
   } else {
     const obj = createSquare(mx, (cameraSettings.top - my));
-    gameObjects.push(obj);
   }
 });
 
@@ -204,8 +227,7 @@ renderer.domElement.addEventListener('mouseleave', () => {
 setOnMessage((msg, peerId) => {
   if (msg.type === "spawn") {
     const objectType = msg.objectType || GAME_OBJECT_TYPES.SQUARE;
-    const obj = createGameObject(objectType, msg.x, msg.y, true, msg.id);
-    gameObjects.push(obj);
+    const obj = createGameObject(objectType, msg.x, msg.y, true, msg.id, msg.cardId);
   } else if (msg.type === "move") {
     const obj = findGameObjectById(msg.id);
     if (obj) {
@@ -216,8 +238,7 @@ setOnMessage((msg, peerId) => {
     // Handle sync message with multiple objects
     if (msg.objects && Array.isArray(msg.objects)) {
       msg.objects.forEach(objData => {
-        const obj = createGameObject(objData.type, objData.x, objData.y, true, objData.id);
-        gameObjects.push(obj);
+        const obj = createGameObject(objData.type, objData.x, objData.y, true, objData.id, objData.cardId);
       });
     }
   } else if (msg.type === "chat") {
@@ -249,15 +270,24 @@ function resizeCameraAndRenderer() {
 
 // Function to sync all current game objects to a new peer
 export function syncAllObjects() {
-  const objectsData = gameObjects.map(obj => ({
-    id: obj.gameId,
-    type: obj.type,
-    x: obj.position.x,
-    y: obj.position.y,
-    size: obj.size,
-    height: obj.height || 20,
-    color: obj.material && obj.material.color ? obj.material.color.getHex() : 0x3498db
-  }));
+  const objectsData = gameObjects.map(obj => {
+    const data = {
+      id: obj.gameId,
+      type: obj.type,
+      x: obj.position.x,
+      y: obj.position.y,
+      size: obj.size,
+      height: obj.height || 20,
+      color: obj.material && obj.material.color ? obj.material.color.getHex() : 0x3498db
+    };
+    
+    // Add cardId for cards
+    if (obj.type === GAME_OBJECT_TYPES.CARD && obj.cardId) {
+      data.cardId = obj.cardId;
+    }
+    
+    return data;
+  });
   
   return {
     type: "sync",

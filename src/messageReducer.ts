@@ -15,6 +15,7 @@ export interface SpawnPayload {
   y: number;
   id: string;
   objectType?: string;
+  cardId?: string;
 }
 
 export interface MovePayload {
@@ -39,6 +40,7 @@ export interface GameObjectData {
   size: number;
   height?: number;
   color?: number;
+  cardId?: string;
 }
 
 export interface SyncPayload {

@@ -1,0 +1,14 @@
+[
+    {
+        "cardTitle": "Fate",
+        "cardDescription": "Roll 2d6",
+        "cardId": "1",
+        "cardImage": "https://media.discordapp.net/attachments/142412877712588800/1387996893480747109/Featured-Images-72.png?ex=6865f7d7&is=6864a657&hm=7abf68632f1eb2b0c0acee98ebc186f7c47f24ee13520f20e197df77621e921d&=&format=webp&quality=lossless&width=1472&height=1138"
+    },
+    {
+        "cardId": "2",      
+        "cardTitle": "Dash",
+        "cardDescription": "+5 movement",
+        "cardImage": "https://media.discordapp.net/attachments/142412877712588800/1386426797960462346/20250622_152454.jpg?ex=68658793&is=68643613&hm=395abd2605621a73ed332822a11d1e67c7d9fcefc964c0652282bc6f21855b44&=&format=webp&width=972&height=1296"
+    }
+]

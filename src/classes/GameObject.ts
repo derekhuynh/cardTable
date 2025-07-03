@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
 export const GAME_OBJECT_TYPES = {
-  SQUARE: 'square'
+  SQUARE: 'square',
+  CARD: 'card'
 } as const;
 
 export type GameObjectType = typeof GAME_OBJECT_TYPES[keyof typeof GAME_OBJECT_TYPES];
