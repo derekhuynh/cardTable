@@ -4,6 +4,7 @@ let hostConnection; // used by peer to connect to host
 let hostDataChannel; // used by peer to connect to host's data channel
 let onMessage = null;
 let roomname = null;
+let firebaseListeners = new Map(); // Track listeners for cleanup
 window.peerConnections = peerConnections;
 window.dataChannels = dataChannels;
 window.hostConnection = hostConnection;
@@ -44,7 +45,12 @@ const rtcConfig = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun.l.google.com:5349" },
-    { urls: "stun:stun1.l.google.com:3478" }
+    { urls: "stun:stun1.l.google.com:3478" },
+    {
+      urls: import.meta.env.VITE_TURN_URL,
+      username: import.meta.env.VITE_TURN_USERNAME,
+      credential: import.meta.env.VITE_TURN_PASSWORD
+    }
   ]
 };
 
@@ -57,7 +63,7 @@ startOfferButton.onclick = async () => {
   const peersRef = collection(roomRef, 'peers');
 
   // Listen for new peers requesting to join
-  onSnapshot(peersRef, snapshot => {
+  const peersUnsubscribe = onSnapshot(peersRef, snapshot => {
     snapshot.docChanges().forEach(async change => {
       const peerId = change.doc.id;
       if (change.type === "added" && !peerConnections[peerId]) {
@@ -65,6 +71,7 @@ startOfferButton.onclick = async () => {
       }
     });
   });
+  trackListener(`peers-${roomId}`, peersUnsubscribe);
 
   log("Room created. Share this code: " + roomId);
   updateRtcStatus();
@@ -72,61 +79,87 @@ startOfferButton.onclick = async () => {
 
 async function onPeerJoin(peersRef, peerId) {
   log(`New peer connection requested: ${peerId}`);
-  // 1. Create a new connection for this peer
-  peerConnections[peerId] = new RTCPeerConnection(rtcConfig);
-  let pc = peerConnections[peerId];
+  
+  try {
+    // 1. Create a new connection for this peer
+    log('Creating connection...')
+    peerConnections[peerId] = new RTCPeerConnection(rtcConfig);
+    let pc = peerConnections[peerId];
 
-  // 2. Create a data channel for this peer
-  dataChannels[peerId] = pc.createDataChannel(peerId);
-  setupChannel(dataChannels[peerId], peerId);
+    // 2. Create a data channel for this peer
+    log('Creating datachannel...')
+    dataChannels[peerId] = pc.createDataChannel(peerId);
+    setupChannel(dataChannels[peerId], peerId);
 
-  // 3. ICE candidate handling
-  const peerRef = doc(peersRef, peerId);
-  addIceListeners(peerConnections[peerId], peerRef, peerId, "offer");
+    // 3. ICE candidate handling
+    const peerRef = doc(peersRef, peerId);
+    addIceListeners(peerConnections[peerId], peerRef, peerId, "offer");
 
-  // 4. Create offer and set as local description
-  const offer = await peerConnections[peerId].createOffer();
-  await peerConnections[peerId].setLocalDescription(offer);
+    // 4. Create offer and set as local description with timeout
+    const offer = await withTimeout(
+      peerConnections[peerId].createOffer(),
+      10000,
+      'Timeout creating offer'
+    );
+    log('Offer created...')
+    await peerConnections[peerId].setLocalDescription(offer);
 
-  // 5. Store offer in Firestore
-  // HOST stores full offer object
-  await setDoc(doc(peersRef, peerId), { offer: offer }, { merge: true });
-
-  // 6. Listen for answer from this peer
-  onSnapshot(doc(peersRef, peerId), docSnap => {
-    const data = docSnap.data();
-    if (data && data.answer && !peerConnections[peerId].currentRemoteDescription) {
-      console.log(`Set remote description for peer ${peerId}: ` + JSON.stringify(data.answer));
-      peerConnections[peerId].setRemoteDescription(new RTCSessionDescription(data.answer));
-    }
-  });
-
-  // 7. Listen for answer ICE candidates from this peer
-  const answerCandidates = collection(peersRef, peerId, `answerCandidates`);
-  onSnapshot(answerCandidates, candSnap => {
-    candSnap.docChanges().forEach(candChange => {
-      if (candChange.type === "added") {
-        peerConnections[peerId].addIceCandidate(new RTCIceCandidate(candChange.doc.data()));
+    // 5. Wait for ICE gathering to complete before sending offer
+    await new Promise((resolve) => {
+      if (peerConnections[peerId].iceGatheringState === 'complete') {
+        resolve();
+      } else {
+        peerConnections[peerId].addEventListener('icegatheringstatechange', () => {
+          if (peerConnections[peerId].iceGatheringState === 'complete') {
+            resolve();
+          }
+        }, { once: true });
       }
     });
-  });
-  // 8. Data channel setup(if peer sends it)
-  peerConnections[peerId].ondatachannel = (e) => {
-    log(`Data channel established with peer ${peerId}`);
-    dataChannels[peerId] = e.channel;
-    setupChannel(e.channel, peerId);
-  };
-  pc.onconnectionstatechange = () => {
-    log(`Connection state: ${pc.connectionState}`);
-    if (pc.connectionState === 'failed') {
-      log('Connection failed - may need TURN server');
-    }
-  };
-  updateRtcStatus();
+
+    // 6. Store complete offer in Firestore
+    await setDoc(doc(peersRef, peerId), { offer: peerConnections[peerId].localDescription }, { merge: true });
+    log('Offer stored...')
+
+    // 7. Listen for answer from this peer
+    const answerUnsubscribe = onSnapshot(doc(peersRef, peerId), docSnap => {
+      const data = docSnap.data();
+      if (data && data.answer && !peerConnections[peerId].currentRemoteDescription) {
+        console.log(`Set remote description for peer ${peerId}: ` + JSON.stringify(data.answer));
+        peerConnections[peerId].setRemoteDescription(new RTCSessionDescription(data.answer));
+      }
+    });
+    trackListener(`answer-${peerId}`, answerUnsubscribe);
+
+    // 8. Listen for answer ICE candidates from this peer
+    const answerCandidates = collection(peersRef, peerId, `answerCandidates`);
+    const candidatesUnsubscribe = onSnapshot(answerCandidates, candSnap => {
+      candSnap.docChanges().forEach(candChange => {
+        if (candChange.type === "added") {
+          peerConnections[peerId].addIceCandidate(new RTCIceCandidate(candChange.doc.data()));
+        }
+      });
+    });
+    trackListener(`candidates-${peerId}`, candidatesUnsubscribe);
+    
+    // 9. Data channel setup(if peer sends it)
+    peerConnections[peerId].ondatachannel = (e) => {
+      log(`Data channel established with peer ${peerId}`);
+      dataChannels[peerId] = e.channel;
+      setupChannel(e.channel, peerId);
+    };
+    
+    addConnectionStateListeners(pc, peerId);
+    updateRtcStatus();
+  } catch (error) {
+    log(`Failed to create connection with ${peerId}: ${error.message}`);
+    cleanupPeerConnection(peerId);
+  }
 }
 
 // --- PEER LOGIC ---
 callButton.onclick = async () => {
+  log("Starting connection...")
   const peerId = idInput.value.trim() || randomId();
   const roomId = callInput.value.trim();
   if (!roomId) {
@@ -141,16 +174,21 @@ callButton.onclick = async () => {
   await setDoc(peerRef, { requested: true }, { merge: true });
 
   // Listen for offer from host
-  onSnapshot(peerRef, async (docSnap) => {
+  const offerUnsubscribe = onSnapshot(peerRef, async (docSnap) => {
+    log("Waiting for firestore snapshot...")
     const data = docSnap.data();
+    log(data)
     if (data && data.offer && !hostConnection) {
+      log("Joining host...")
       onJoin(peerRef, peerId, data)
     }
   });
+  trackListener(`offer-${peerId}`, offerUnsubscribe);
 
   // Remove peer from Firestore when disconnecting or closing the page
   window.addEventListener('beforeunload', async () => {
     try {
+      cleanupFirebaseListeners();
       await deleteDoc(peerRef);
     } catch (e) {
       // Ignore errors (e.g., if already deleted)
@@ -163,10 +201,8 @@ async function onJoin(peerRef, peerId, data){
   hostConnection = new RTCPeerConnection(rtcConfig);
   let pc = hostConnection
 
-  // Create data channel BEFORE setting remote description and creating answer
-  // const dc = pc.createDataChannel("data");
-  // hostDataChannel = dc;
-  // setupChannel(dc, peerId);
+  // Peer doesn't need to create data channel - host creates it
+  // Just wait for host's data channel via ondatachannel event
 
   // Set remote offer
   await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -174,13 +210,14 @@ async function onJoin(peerRef, peerId, data){
 
   // Listen for offer ICE candidates from host
   const offerCandidates = collection(peerRef, 'offerCandidates');
-  onSnapshot(offerCandidates, snapshot => {
+  const offerCandidatesUnsubscribe = onSnapshot(offerCandidates, snapshot => {
     snapshot.docChanges().forEach(change => {
       if (change.type === "added") {
         pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
       }
     });
   });
+  trackListener(`offerCandidates-${peerId}`, offerCandidatesUnsubscribe);
 
   // Create answer and upload to Firestore
   const answer = await pc.createAnswer();
@@ -196,23 +233,73 @@ async function onJoin(peerRef, peerId, data){
     dataChannels[peerId] = e.channel;
     setupChannel(e.channel, peerId);
   };
-  pc.onconnectionstatechange = () => {
-    log(`Connection state: ${pc.connectionState}`);
-    if (pc.connectionState === 'failed') {
-      log('Connection failed - may need TURN server');
-    }
-  };
+  addConnectionStateListeners(pc, peerId);
   log("Joined room.");
   updateRtcStatus();
+}
+
+// Firebase listener management
+function trackListener(key, unsubscribe) {
+  firebaseListeners.set(key, unsubscribe);
+}
+
+function cleanupFirebaseListeners() {
+  firebaseListeners.forEach((unsubscribe, key) => {
+    console.log(`Cleaning up Firebase listener: ${key}`);
+    unsubscribe();
+  });
+  firebaseListeners.clear();
+}
+
+// Cleanup function for peer connections
+function cleanupPeerConnection(peerId) {
+  console.log(`Cleaning up peer connection: ${peerId}`);
+  
+  // Close data channel
+  if (dataChannels[peerId]) {
+    dataChannels[peerId].close();
+    delete dataChannels[peerId];
+  }
+  
+  // Close peer connection
+  if (peerConnections[peerId]) {
+    peerConnections[peerId].close();
+    delete peerConnections[peerId];
+  }
+  
+  // Update status
+  updateRtcStatus();
+}
+
+// Connection timeout helper
+function withTimeout(promise, timeoutMs, errorMessage) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    )
+  ]);
+}
+
+// Add connection state monitoring
+function addConnectionStateListeners(pc, peerId) {
+  pc.onconnectionstatechange = () => {
+    log(`Connection state: ${pc.connectionState}`);
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      if (pc.connectionState === 'failed') {
+        log('Connection failed - may need TURN server');
+      }
+      cleanupPeerConnection(peerId);
+    }
+  };
 }
 
 // ice helper
 function addIceListeners(peerConnection, peersRef, peerId, type) {
   const iceCandidates = collection(peersRef, `${type}Candidates`);
   peerConnection.onicecandidate = event => {
-    console.log(`New ICE candidate for peer ${peerId}:`, event.candidate);
     if (event.candidate) {
-      console.log(`New ICE candidate for peer ${peerId}:`, event.candidate);
+      console.log(`New ICE candidate for peer ${peerId}:`, event.candidate.candidate);
       addDoc(iceCandidates, event.candidate.toJSON());
     }
   };
